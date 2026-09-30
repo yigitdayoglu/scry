@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Pano · Scry{% endblock %}
+
+{# severity anahtarı -> (badge sınıfı, gösterim adı) #}
+{% set sev_meta = {
+  "KRITIK": ("crit", "Kritik"), "YUKSEK": ("high", "Yüksek"),
+  "ORTA": ("med", "Orta"), "DUSUK": ("low", "Düşük"),
+  "BILINMIYOR": ("none", "Bilinmiyor")
+} %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Güvenlik Panosu</h1>
+    <div class="sub">{{ stats.targets }} hedef izleniyor · {{ stats.scans }} tarama çalıştırıldı</div>
+  </div>
+
+  {# --- Genel özet: tüm hedeflerin son taramalarının toplamı --- #}
+  <div class="stats">
+    <div class="stat crit"><div class="n">{{ overall.KRITIK }}</div><div class="l">Kritik</div></div>
+    <div class="stat high"><div class="n">{{ overall.YUKSEK }}</div><div class="l">Yüksek</div></div>
+    <div class="stat med"><div class="n">{{ overall.ORTA }}</div><div class="l">Orta</div></div>
+    <div class="stat low"><div class="n">{{ overall.DUSUK }}</div><div class="l">Düşük</div></div>
+    <div class="stat total"><div class="n">{{ overall.values() | sum }}</div><div class="l">Toplam Açık</div></div>
+  </div>
+
+  {# --- Hedefler --- #}
+  <section class="section">
+    <div class="section-head">
+      <h2>Hedefler</h2>
+      <span class="count">{{ target_rows | length }}</span>
+    </div>
+    {% if target_rows %}
+    <div class="panel"><div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Host</th><th>Durum</th><th>Aralık</th><th>Son Tarama</th>
+        <th>Güncel Bulgular</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for t in target_rows %}
+        <tr>
+          <td><span class="host mono">{{ t.host }}</span></td>
+          <td>
+            {% if t.enabled %}<span class="badge ok dot">aktif</span>
+            {% else %}<span class="badge none dot">pasif</span>{% endif %}
+          </td>
+          <td class="num dim">{{ t.interval_minutes }}<span class="faint"> dk</span></td>
+          <td class="mono dim">{{ t.last_scan_at.strftime('%d.%m %H:%M') if t.last_scan_at else '—' }}</td>
+          <td>
+            {% if t.total == 0 %}
+              {% if t.latest_scan_id %}<span class="faint">temiz</span>
+              {% else %}<span class="faint">tarama yok</span>{% endif %}
+            {% else %}
+              <div class="sev-badges">
+                {% for sev in severity_order if t.counts[sev] %}
+                  <span class="badge {{ sev_meta[sev][0] }}">{{ t.counts[sev] }} {{ sev_meta[sev][1] }}</span>
+                {% endfor %}
+                {% if t.confirmed %}<span class="badge verified">{{ t.confirmed }} doğrulandı</span>{% endif %}
+              </div>
+            {% endif %}
+          </td>
+          <td>{% if t.latest_scan_id %}<a href="{{ url_for('main.scan_detail', scan_id=t.latest_scan_id) }}" class="btn ghost sm">Detay</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div></div>
+    {% else %}
+    <div class="panel"><div class="empty">
+      <div class="big">Henüz hedef yok</div>
+      <div class="small">Bir hedef ekleyince otomatik taramalar burada görünecek.</div>
+    </div></div>
+    {% endif %}
+  </section>
+
+  {# --- Son taramalar --- #}
+  <section class="section">
+    <div class="section-head">
+      <h2>Son Taramalar</h2>
+      <span class="count">son {{ recent | length }}</span>
+    </div>
+    {% if recent %}
+    <div class="panel"><div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Host</th><th>Durum</th><th>Başlangıç</th>
+        <th>Bulgu</th><th>Kritik</th><th>Doğrulandı</th>
+      </tr></thead>
+      <tbody>
+        {% for r in recent %}
+        <tr>
+          <td class="num"><a href="{{ url_for('main.scan_detail', scan_id=r.id) }}" class="faint">{{ r.id }}</a></td>
+          <td class="mono">{{ r.host }}</td>
+          <td><span class="st {{ r.status }}">{{ r.status }}</span></td>
+          <td class="mono dim">{{ r.started_at.strftime('%d.%m %H:%M') if r.started_at else '—' }}</td>
+          <td class="num">{{ r.total }}</td>
+          <td>{% if r.crit %}<span class="badge crit">{{ r.crit }}</span>{% else %}<span class="num faint">0</span>{% endif %}</td>
+          <td>{% if r.confirmed %}<span class="badge verified">{{ r.confirmed }}</span>{% else %}<span class="num faint">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div></div>
+    {% else %}
+    <div class="panel"><div class="empty">
+      <div class="big">Henüz tarama yok</div>
+      <div class="small">İlk tarama tamamlandığında geçmiş burada listelenir.</div>
+    </div></div>
+    {% endif %}
+  </section>
+{% endblock %}

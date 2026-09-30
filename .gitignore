@@ -1,0 +1,21 @@
+# Sırlar — asla paylaşılmaz
+.env
+
+# Python sanal ortamı
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Uygulama verisi
+*.db
+*.sqlite
+.cache/
+logs/*.log
+
+# IDE
+.idea/
+.vscode/
+
+# İşletim sistemi
+.DS_Store

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Güvenlik Raporu — {{ scan.host }} #{{ scan.id }}</title>
+  <style>
+    :root { --ink:#1a2230; --muted:#5b6675; --line:#e2e6ec; --bg:#fff;
+      --crit:#c0362c; --high:#c25a1a; --med:#9a7b00; --low:#5566aa; --pri:#0e7490; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#f3f5f8; color:var(--ink);
+      font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;
+      font-size:13px; line-height:1.5; }
+    .sheet { max-width:900px; margin:24px auto; background:var(--bg);
+      padding:44px 48px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .mono { font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+    .toolbar { max-width:900px; margin:0 auto; padding:0 8px; display:flex;
+      justify-content:flex-end; gap:8px; }
+    .btn { font:inherit; font-size:13px; font-weight:600; cursor:pointer;
+      border:1px solid var(--line); background:#fff; color:var(--ink);
+      padding:8px 14px; border-radius:7px; }
+    .btn.primary { background:var(--pri); color:#fff; border-color:var(--pri); }
+    header.rep { display:flex; justify-content:space-between; align-items:flex-start;
+      border-bottom:2px solid var(--ink); padding-bottom:16px; margin-bottom:20px; }
+    header.rep .brand { font-weight:800; font-size:16px; letter-spacing:-.01em; }
+    header.rep .brand span { color:var(--crit); }
+    header.rep .meta { text-align:right; color:var(--muted); font-size:12px; }
+    h1 { font-size:19px; margin:18px 0 2px; }
+    .host { font-family:ui-monospace,Menlo,monospace; }
+    .summary { display:grid; grid-template-columns:repeat(5,1fr); gap:10px;
+      margin:20px 0 26px; }
+    .box { border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+    .box .n { font-size:24px; font-weight:700; font-family:ui-monospace,Menlo,monospace; }
+    .box .l { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-top:4px; }
+    .box.kev .n { color:var(--crit); } .box.pri .n { color:var(--pri); }
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;
+      color:var(--muted); border-bottom:1.5px solid var(--line); padding:7px 8px; }
+    td { padding:8px; border-bottom:1px solid var(--line); font-size:12px; vertical-align:top; }
+    .sev { display:inline-block; padding:1px 7px; border-radius:10px; font-size:10.5px; font-weight:700; }
+    .s-KRITIK{background:#fbe9e7;color:var(--crit)} .s-YUKSEK{background:#fdefe2;color:var(--high)}
+    .s-ORTA{background:#fbf5df;color:var(--med)} .s-DUSUK{background:#eef1fb;color:var(--low)}
+    .s-BILINMIYOR{background:#eef0f2;color:var(--muted)}
+    .kevtag{background:var(--crit);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700}
+    .vtag{color:var(--pri);font-weight:700;font-size:11px}
+    footer.rep { margin-top:26px; padding-top:14px; border-top:1px solid var(--line);
+      font-size:11px; color:var(--muted); }
+    @media print {
+      body { background:#fff; } .toolbar { display:none; }
+      .sheet { box-shadow:none; margin:0; max-width:none; padding:0; }
+      thead { display:table-header-group; } tr { break-inside:avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a class="btn" href="{{ url_for('main.scan_detail', scan_id=scan.id) }}">← Detaya dön</a>
+    <button class="btn primary" onclick="window.print()">PDF olarak kaydet / Yazdır</button>
+  </div>
+
+  <div class="sheet">
+    <header class="rep">
+      <div class="brand"><span>Scry</span> · Güvenlik Raporu</div>
+      <div class="meta">
+        Tarama #{{ scan.id }}<br>
+        Oluşturma: {{ generated_at.strftime('%d.%m.%Y %H:%M UTC') }}
+      </div>
+    </header>
+
+    <h1>Hedef: <span class="host">{{ scan.host }}</span></h1>
+    <div style="color:var(--muted);font-size:12px;">
+      Tarama zamanı: {{ scan.started_at.strftime('%d.%m.%Y %H:%M') if scan.started_at else '—' }}
+      · Durum: {{ scan.status }}
+    </div>
+
+    <div class="summary">
+      <div class="box kev"><div class="n">{{ kev }}</div><div class="l">Aktif Sömürülen</div></div>
+      <div class="box"><div class="n" style="color:var(--crit)">{{ counts.KRITIK }}</div><div class="l">Kritik</div></div>
+      <div class="box"><div class="n" style="color:var(--high)">{{ counts.YUKSEK }}</div><div class="l">Yüksek</div></div>
+      <div class="box"><div class="n">{{ total }}</div><div class="l">Toplam Açık</div></div>
+      <div class="box pri"><div class="n">{{ confirmed }}</div><div class="l">Doğrulanmış</div></div>
+    </div>
+
+    {% if findings %}
+    <table>
+      <thead><tr>
+        <th>Önem</th><th>CVSS</th><th>EPSS</th><th>CVE</th><th>Servis</th><th>Ürün</th><th>Not</th>
+      </tr></thead>
+      <tbody>
+        {% for f in findings %}
+        <tr>
+          <td><span class="sev s-{{ f.severity }}">{{ f.severity|capitalize }}</span></td>
+          <td class="mono">{{ '%.1f'|format(f.cvss_score) if f.cvss_score is not none else '—' }}</td>
+          <td class="mono">{{ '%.0f%%'|format(f.epss_score*100) if f.epss_score is not none else '—' }}</td>
+          <td class="mono">{{ f.cve_id }}</td>
+          <td class="mono">{{ f.port }}/{{ f.protocol }}</td>
+          <td class="mono">{{ f.product }} {{ f.version }}</td>
+          <td>
+            {% if f.kev %}<span class="kevtag">KEV</span> {% endif %}
+            {% if f.verification == 'confirmed' %}<span class="vtag">✓ doğrulandı</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--muted)">Bu taramada (yanlış pozitifler hariç) bulgu yok.</p>
+    {% endif %}
+
+    <footer class="rep">
+      Bu rapor Scry tarafından otomatik üretilmiştir. Bulgular nmap servis/versiyon
+      tespiti ile NVD eşleştirmesine dayanır; "doğrulandı" işaretli olanlar nuclei ile aktif
+      olarak teyit edilmiştir. Yalnızca yetkili sistemlerde kullanım içindir.
+    </footer>
+  </div>
+</body>
+</html>

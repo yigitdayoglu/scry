@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Hedefler · Scry{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Hedefler</h1>
+    <div class="sub">Taranacak sistemleri ekle, tarama sıklığını seç, dilediğinde elle tara.</div>
+  </div>
+
+  {# --- Hedef ekleme formu --- #}
+  <section class="section" style="margin-top: 4px;">
+    <div class="section-head"><h2>Yeni Hedef Ekle</h2></div>
+    <div class="panel" style="padding: 20px;">
+      <form method="POST" action="{{ url_for('main.add_target') }}" class="add-form">
+        <div class="add-grid">
+          <label class="field" style="grid-column: span 2;">
+            Host / IP
+            <input type="text" name="host" placeholder="ör. 192.168.1.10 veya scanme.nmap.org" required>
+          </label>
+          <label class="field">
+            Portlar <span class="faint">(opsiyonel)</span>
+            <input type="text" name="ports" placeholder="22,80,443 — boş: ilk 1000">
+          </label>
+          <label class="field">
+            Tarama sıklığı
+            <select name="interval">
+              {% for m, label in interval_choices %}
+              <option value="{{ m }}" {{ 'selected' if m == 360 }}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+
+        <div class="auth-box">
+          <label class="auth-check">
+            <input type="checkbox" name="authorized">
+            <span>Bu host'u taramaya <b>yetkili olduğumu</b> onaylıyorum.</span>
+          </label>
+          <p class="auth-note">
+            Yalnızca sahibi olduğun ya da yazılı iznin bulunan sistemleri tara.
+            İzinsiz tarama birçok ülkede (Türkiye'de TCK m. 243–244) suç teşkil eder;
+            sorumluluk tamamen sana aittir.
+          </p>
+        </div>
+
+        <div class="btn-row" style="margin-top: 4px;">
+          <button type="submit" class="btn primary">Hedef Ekle</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  {# --- Hedef listesi --- #}
+  <section class="section">
+    <div class="section-head">
+      <h2>İzlenen Hedefler</h2>
+      <span class="count">{{ targets | length }}</span>
+    </div>
+    {% if targets %}
+    <div class="panel"><div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Host</th><th>Portlar</th><th>Sıklık</th><th>Durum</th>
+        <th>Son Tarama</th><th style="text-align:right;">İşlemler</th>
+      </tr></thead>
+      <tbody>
+        {% for t in targets %}
+        <tr>
+          <td><span class="host mono">{{ t.host }}</span></td>
+          <td class="mono dim">{{ t.ports or 'ilk 1000' }}</td>
+          <td class="dim">{{ t.interval_minutes }}<span class="faint"> dk</span></td>
+          <td>
+            {% if t.enabled %}<span class="badge ok dot">aktif</span>
+            {% else %}<span class="badge none dot">duraklatıldı</span>{% endif %}
+          </td>
+          <td class="mono dim">{{ t.last_scan_at.strftime('%d.%m %H:%M') if t.last_scan_at else '—' }}</td>
+          <td>
+            <div class="btn-row" style="justify-content: flex-end;">
+              <form method="POST" action="{{ url_for('main.scan_target', tid=t.id) }}" class="js-scan">
+                <button type="submit" class="btn primary sm">Şimdi Tara</button>
+              </form>
+              <form method="POST" action="{{ url_for('main.toggle_target', tid=t.id) }}">
+                <button type="submit" class="btn ghost sm">{{ 'Duraklat' if t.enabled else 'Etkinleştir' }}</button>
+              </form>
+              <form method="POST" action="{{ url_for('main.delete_target', tid=t.id) }}"
+                    onsubmit="return confirm('{{ t.host }} ve tüm taramaları silinecek. Emin misin?');">
+                <button type="submit" class="btn danger sm">Sil</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div></div>
+    {% else %}
+    <div class="panel"><div class="empty">
+      <div class="big">Henüz hedef eklenmedi</div>
+      <div class="small">Yukarıdaki formdan ilk hedefini ekle; otomatik taramalar burada listelenecek.</div>
+    </div></div>
+    {% endif %}
+  </section>
+
+  <style>
+    .add-grid { display: grid; gap: 14px; margin-bottom: 16px;
+      grid-template-columns: repeat(4, 1fr); }
+    .add-grid input, .add-grid select { width: 100%; }
+    .auth-box { background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 13px 15px; margin-bottom: 16px; }
+    .auth-check { display: flex; align-items: center; gap: 9px; cursor: pointer;
+      font-size: 0.86rem; color: var(--ink); }
+    .auth-check input { width: 15px; height: 15px; accent-color: var(--primary);
+      cursor: pointer; }
+    .auth-note { margin: 8px 0 0 24px; font-size: 0.76rem; color: var(--muted);
+      line-height: 1.55; max-width: 68ch; }
+    @media (max-width: 720px) { .add-grid { grid-template-columns: 1fr 1fr; }
+      .add-form label[style] { grid-column: span 2 !important; } }
+  </style>
+
+  <script>
+    // "Şimdi Tara": tarama ~15 sn sürer; kullanıcıya işlemin başladığını göster.
+    // (İşlevsel geri bildirim — Emil: yüksek değil, tek seferlik bir eylem.)
+    document.querySelectorAll('form.js-scan').forEach(function (f) {
+      f.addEventListener('submit', function () {
+        var b = f.querySelector('button');
+        b.disabled = true;
+        b.textContent = 'Başlatılıyor…';
+      });
+    });
+  </script>
+{% endblock %}

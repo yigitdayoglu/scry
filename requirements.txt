@@ -1,0 +1,15 @@
+# --- Tarama katmanı ---
+python-nmap>=0.7.1      # nmap çıktısını yapılandırılmış Python nesnesine çevirir
+requests>=2.31          # NVD API'ye HTTP istekleri
+
+# --- Veri katmanı ---
+SQLAlchemy>=2.0         # ORM: veritabanını Python nesneleriyle yönetmek
+
+# --- Zamanlama ---
+APScheduler>=3.10       # periyodik taramaları uygulama içinden çalıştırmak
+
+# --- Web arayüzü ---
+Flask>=3.0              # dashboard ve hedef yönetimi arayüzü
+
+# --- Yapılandırma ---
+python-dotenv>=1.0      # API anahtarı gibi sırları .env dosyasından okumak

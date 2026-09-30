@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Diff · tarama #{{ scan.id }} · Scry{% endblock %}
+
+{% set sev_meta = {
+  "KRITIK": ("crit", "Kritik"), "YUKSEK": ("high", "Yüksek"),
+  "ORTA": ("med", "Orta"), "DUSUK": ("low", "Düşük"),
+  "BILINMIYOR": ("none", "Bilinmiyor")
+} %}
+
+{% macro finding_row(f) %}
+  <tr>
+    <td><span class="badge {{ sev_meta[f.severity][0] }}">{{ sev_meta[f.severity][1] }}</span></td>
+    <td class="num">{{ '%.1f'|format(f.cvss_score) if f.cvss_score is not none else '—' }}</td>
+    <td><a href="{{ f.url }}" target="_blank" rel="noopener" class="mono">{{ f.cve_id }}</a>
+        {% if f.kev %} <span class="badge kev">KEV</span>{% endif %}</td>
+    <td class="mono dim">{{ f.port }}</td>
+    <td class="mono dim">{{ f.product }}</td>
+  </tr>
+{% endmacro %}
+
+{% block content %}
+  <div class="page-head">
+    <div style="margin-bottom: 8px;">
+      <a href="{{ url_for('main.scan_detail', scan_id=scan.id) }}" class="faint" style="font-size: 0.82rem;">← Tarama detayına dön</a>
+    </div>
+    <h1>Değişim · {{ scan.host }}</h1>
+    <div class="sub">
+      {% if prev %}
+        Tarama #{{ prev.id }} ({{ prev.started_at.strftime('%d.%m %H:%M') }})
+        → #{{ scan.id }} ({{ scan.started_at.strftime('%d.%m %H:%M') }}) karşılaştırması
+      {% else %}
+        Bu, bu hedefin ilk taraması — karşılaştırılacak önceki tarama yok.
+      {% endif %}
+    </div>
+  </div>
+
+  {% if prev %}
+  <div class="stats" style="grid-template-columns: repeat(3, 1fr); max-width: 520px;">
+    <div class="stat crit"><div class="n" style="color: var(--sev-crit);">{{ new_findings | length }}</div><div class="l">Yeni Çıkan</div></div>
+    <div class="stat total"><div class="n" style="color: var(--primary);">{{ resolved_findings | length }}</div><div class="l">Kapanan</div></div>
+    <div class="stat"><div class="n">{{ unchanged }}</div><div class="l">Değişmeyen</div></div>
+  </div>
+
+  {# --- Yeni çıkanlar --- #}
+  <section class="section">
+    <div class="section-head"><h2 style="color: var(--sev-crit);">▲ Yeni Çıkan Açıklar</h2><span class="count">{{ new_findings | length }}</span></div>
+    {% if new_findings %}
+    <div class="panel"><div class="table-wrap"><table>
+      <thead><tr><th>Önem</th><th>CVSS</th><th>CVE</th><th>Port</th><th>Ürün</th></tr></thead>
+      <tbody>{% for f in new_findings %}{{ finding_row(f) }}{% endfor %}</tbody>
+    </table></div></div>
+    {% else %}
+    <div class="panel"><div class="empty"><div class="big">Yeni açık yok</div><div class="small">Önceki taramaya göre yeni bir CVE ortaya çıkmadı.</div></div></div>
+    {% endif %}
+  </section>
+
+  {# --- Kapananlar --- #}
+  <section class="section">
+    <div class="section-head"><h2 style="color: var(--primary);">▼ Kapanan Açıklar</h2><span class="count">{{ resolved_findings | length }}</span></div>
+    {% if resolved_findings %}
+    <div class="panel"><div class="table-wrap"><table>
+      <thead><tr><th>Önem</th><th>CVSS</th><th>CVE</th><th>Port</th><th>Ürün</th></tr></thead>
+      <tbody>{% for f in resolved_findings %}{{ finding_row(f) }}{% endfor %}</tbody>
+    </table></div></div>
+    {% else %}
+    <div class="panel"><div class="empty"><div class="big">Kapanan açık yok</div><div class="small">Önceki taramadaki CVE'ler hâlâ mevcut.</div></div></div>
+    {% endif %}
+  </section>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Tarama #{{ scan.id }} · Scry{% endblock %}
+
+{% set sev_meta = {
+  "KRITIK": ("crit", "Kritik"), "YUKSEK": ("high", "Yüksek"),
+  "ORTA": ("med", "Orta"), "DUSUK": ("low", "Düşük"),
+  "BILINMIYOR": ("none", "Bilinmiyor")
+} %}
+
+{% block content %}
+  <div class="page-head">
+    <div style="margin-bottom: 8px;">
+      <a href="{{ url_for('main.dashboard') }}" class="faint" style="font-size: 0.82rem;">← Panoya dön</a>
+    </div>
+    <h1>{{ scan.host }} <span class="faint" style="font-weight: 500;">· tarama #{{ scan.id }}</span></h1>
+    <div class="sub">
+      <span class="st {{ scan.status }}">{{ scan.status }}</span> ·
+      başlangıç {{ scan.started_at.strftime('%d.%m.%Y %H:%M') if scan.started_at else '—' }}
+      {% if scan.finished_at %} · bitiş {{ scan.finished_at.strftime('%H:%M') }}{% endif %}
+    </div>
+    {% if scan.error %}<div class="sub" style="color: var(--sev-crit);">Hata: {{ scan.error }}</div>{% endif %}
+    <div class="btn-row" style="margin-top: 14px;">
+      <a href="{{ url_for('main.scan_diff', scan_id=scan.id) }}" class="btn ghost sm">Önceki taramayla karşılaştır</a>
+      <a href="{{ url_for('main.scan_report', scan_id=scan.id) }}" class="btn ghost sm">Rapor / PDF</a>
+    </div>
+  </div>
+
+  {# --- Özet --- #}
+  <div class="stats">
+    <div class="stat crit"><div class="n" style="color: var(--sev-crit);">{{ kev }}</div><div class="l">⚠ Aktif Sömürülen</div></div>
+    <div class="stat crit"><div class="n">{{ counts.KRITIK }}</div><div class="l">Kritik</div></div>
+    <div class="stat high"><div class="n">{{ counts.YUKSEK }}</div><div class="l">Yüksek</div></div>
+    <div class="stat total"><div class="n">{{ total }}</div><div class="l">Toplam</div></div>
+    <div class="stat" style="--rule: var(--primary);"><div class="n" style="color: var(--primary);">{{ confirmed }}</div><div class="l">Doğrulanmış</div></div>
+  </div>
+
+  {# --- Filtreler --- #}
+  <section class="section">
+    <div class="filters">
+      <div class="filter-group" id="sevFilters">
+        <button class="chip active" data-sev="ALL">Tümü</button>
+        {% for sev in severity_order if counts[sev] or sev == 'BILINMIYOR' %}
+          {% if counts[sev] %}<button class="chip" data-sev="{{ sev }}">{{ sev_meta[sev][1] }} <span class="faint">{{ counts[sev] }}</span></button>{% endif %}
+        {% endfor %}
+      </div>
+      <label class="filter-toggle"><input type="checkbox" id="onlyKev"> Sadece aktif sömürülen (KEV)</label>
+      <label class="filter-toggle"><input type="checkbox" id="onlyConfirmed"> Sadece doğrulanmış</label>
+      <label class="filter-toggle"><input type="checkbox" id="showFp"> Yanlış pozitifleri göster ({{ fp }})</label>
+    </div>
+
+    {% if findings %}
+    <div class="panel"><div class="table-wrap">
+    <table id="findingsTable">
+      <thead><tr>
+        <th>Önem</th><th>CVSS</th><th>EPSS</th><th>CVE</th><th>Nerede</th><th>Ürün</th>
+        <th>Durum</th><th>Açıklama</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for f in findings %}
+        <tr data-sev="{{ f.severity }}" data-verif="{{ f.verification }}"
+            data-kev="{{ 1 if f.kev else 0 }}" data-fp="{{ 1 if f.is_false_positive else 0 }}"
+            class="{{ 'is-fp' if f.is_false_positive }}">
+          <td><span class="badge {{ sev_meta[f.severity][0] }}">{{ sev_meta[f.severity][1] }}</span></td>
+          <td class="num">{{ '%.1f'|format(f.cvss_score) if f.cvss_score is not none else '—' }}</td>
+          <td class="num dim" title="Sömürülme olasılığı (30 gün)">{{ '%.0f%%'|format(f.epss_score * 100) if f.epss_score is not none else '—' }}</td>
+          <td><a href="{{ f.url }}" target="_blank" rel="noopener" class="mono">{{ f.cve_id }}</a></td>
+          <td class="mono dim">{{ f.port }}/{{ f.protocol }} <span class="faint">{{ f.service_name }}</span></td>
+          <td class="mono dim">{{ f.product }} {{ f.version }}</td>
+          <td>
+            <div class="sev-badges">
+            {% if f.kev %}<span class="badge kev" title="CISA KEV — aktif olarak sömürülüyor">KEV</span>{% endif %}
+            {% if f.verification == 'confirmed' %}<span class="badge verified">doğrulandı</span>{% endif %}
+            {% if not f.kev and f.verification != 'confirmed' %}<span class="faint" style="font-size: 0.78rem;">—</span>{% endif %}
+            </div>
+          </td>
+          <td class="dim" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+              title="{{ f.description }}">{{ f.description }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('main.toggle_fp', fid=f.id) }}">
+              <button type="submit" class="btn ghost sm">{{ 'YP kaldır' if f.is_false_positive else 'YP işaretle' }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div></div>
+    <p class="faint" id="emptyFilter" style="display:none; padding: 24px; text-align:center;">
+      Bu filtreye uyan bulgu yok.
+    </p>
+    {% else %}
+    <div class="panel"><div class="empty">
+      <div class="big">Bu taramada bulgu yok</div>
+      <div class="small">Tespit edilen servisler için bilinen CVE bulunamadı — iyi haber.</div>
+    </div></div>
+    {% endif %}
+  </section>
+
+  <style>
+    .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+      margin-bottom: 14px; }
+    .filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip { font-family: inherit; font-size: 0.78rem; font-weight: 560; cursor: pointer;
+      padding: 5px 11px; border-radius: 20px; color: var(--muted);
+      background: var(--surface); border: 1px solid var(--border);
+      transition: color .13s var(--ease), border-color .13s var(--ease), background .13s var(--ease); }
+    .chip:hover { color: var(--ink); border-color: var(--border-strong); }
+    .chip.active { color: var(--on-primary); background: var(--primary-fill);
+      border-color: transparent; }
+    .filter-toggle { display: flex; align-items: center; gap: 7px; cursor: pointer;
+      font-size: 0.8rem; color: var(--muted); }
+    .filter-toggle input { width: 14px; height: 14px; accent-color: var(--primary); cursor: pointer; }
+    tr.is-fp { opacity: 0.42; }
+    tr.is-fp .badge { filter: saturate(0.5); }
+  </style>
+
+  <script>
+    // Filtreleme anlık (sık etkileşim → animasyon yok). Satırlar data-* taşıyor.
+    (function () {
+      var table = document.getElementById('findingsTable');
+      if (!table) return;
+      var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+      var chips = document.querySelectorAll('#sevFilters .chip');
+      var onlyKev = document.getElementById('onlyKev');
+      var onlyConfirmed = document.getElementById('onlyConfirmed');
+      var showFp = document.getElementById('showFp');
+      var emptyMsg = document.getElementById('emptyFilter');
+      var activeSev = 'ALL';
+
+      function apply() {
+        var visible = 0;
+        rows.forEach(function (r) {
+          var okSev = activeSev === 'ALL' || r.dataset.sev === activeSev;
+          var okKev = !onlyKev.checked || r.dataset.kev === '1';
+          var okConf = !onlyConfirmed.checked || r.dataset.verif === 'confirmed';
+          var okFp = showFp.checked || r.dataset.fp === '0';
+          var show = okSev && okKev && okConf && okFp;
+          r.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+        emptyMsg.style.display = visible ? 'none' : 'block';
+      }
+
+      chips.forEach(function (c) {
+        c.addEventListener('click', function () {
+          chips.forEach(function (x) { x.classList.remove('active'); });
+          c.classList.add('active');
+          activeSev = c.dataset.sev;
+          apply();
+        });
+      });
+      onlyKev.addEventListener('change', apply);
+      onlyConfirmed.addEventListener('change', apply);
+      showFp.addEventListener('change', apply);
+      apply();
+    })();
+  </script>
+{% endblock %}
